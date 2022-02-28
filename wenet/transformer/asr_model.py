@@ -85,6 +85,7 @@ class ASRModel(torch.nn.Module):
             text: (Batch, Length)
             text_lengths: (Batch,)
         """
+        print ("forward!!!")
         assert text_lengths.dim() == 1, text_lengths.shape
         # Check that batch_size is unified
         assert (speech.shape[0] == speech_lengths.shape[0] == text.shape[0] ==
@@ -137,8 +138,11 @@ class ASRModel(torch.nn.Module):
                                                      ys_in_pad, ys_in_lens,
                                                      r_ys_in_pad,
                                                      self.reverse_weight)
+        print ("decoder_out", decoder_out)
         # 2. Compute attention loss
+        print ("ys_out_pad", ys_out_pad)
         loss_att = self.criterion_att(decoder_out, ys_out_pad)
+        print ("ys_out_pad", ys_out_pad)
         r_loss_att = torch.tensor(0.0)
         if self.reverse_weight > 0.0:
             r_loss_att = self.criterion_att(r_decoder_out, r_ys_out_pad)

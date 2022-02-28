@@ -9,6 +9,11 @@ from typing import Optional, Tuple
 import torch
 from torch import nn
 
+from wenet.transformer.debug import PassLayer
+
+import os
+import numpy as np
+root_dir = "../DeepSpeech/compare/result_store/wenet"
 
 class DecoderLayer(nn.Module):
     """Single decoder layer module.
@@ -39,6 +44,7 @@ class DecoderLayer(nn.Module):
         dropout_rate: float,
         normalize_before: bool = True,
         concat_after: bool = False,
+        layer_idx: int = -1,
     ):
         """Construct an DecoderLayer object."""
         super().__init__()
@@ -49,11 +55,17 @@ class DecoderLayer(nn.Module):
         self.norm1 = nn.LayerNorm(size, eps=1e-5)
         self.norm2 = nn.LayerNorm(size, eps=1e-5)
         self.norm3 = nn.LayerNorm(size, eps=1e-5)
+
+      #  self.norm1 = PassLayer(size, eps=1e-5)
+      #  self.norm2 = PassLayer(size, eps=1e-5)
+      #  self.norm3 = PassLayer(size, eps=1e-5)
+
         self.dropout = nn.Dropout(dropout_rate)
         self.normalize_before = normalize_before
         self.concat_after = concat_after
         self.concat_linear1 = nn.Linear(size + size, size)
         self.concat_linear2 = nn.Linear(size + size, size)
+        self.layer_idx = layer_idx
 
     def forward(
         self,
@@ -108,6 +120,10 @@ class DecoderLayer(nn.Module):
         else:
             x = residual + self.dropout(
                 self.self_attn(tgt_q, tgt, tgt, tgt_q_mask))
+
+            x_np = x.cpu().detach().numpy()
+            np.save(os.path.join(root_dir, "decoder_" + str(self.layer_idx) + "_attn_.npy"), x_np)
+
         if not self.normalize_before:
             x = self.norm1(x)
 
@@ -121,6 +137,8 @@ class DecoderLayer(nn.Module):
         else:
             x = residual + self.dropout(
                 self.src_attn(x, memory, memory, memory_mask))
+            x_np = x.cpu().detach().numpy()
+            np.save(os.path.join(root_dir, "decoder_" + str(self.layer_idx) + "_src_attn_.npy"), x_np)
         if not self.normalize_before:
             x = self.norm2(x)
 
@@ -128,6 +146,10 @@ class DecoderLayer(nn.Module):
         if self.normalize_before:
             x = self.norm3(x)
         x = residual + self.dropout(self.feed_forward(x))
+
+        x_np = x.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, "decoder_" + str(self.layer_idx) + "_ff_.npy"), x_np)
+
         if not self.normalize_before:
             x = self.norm3(x)
 

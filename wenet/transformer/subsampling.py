@@ -8,7 +8,9 @@
 from typing import Tuple
 
 import torch
-
+import os
+import numpy as np
+root_dir = "../DeepSpeech/compare/result_store/wenet"
 
 class BaseSubsampling(torch.nn.Module):
     def __init__(self):
@@ -116,9 +118,20 @@ class Conv2dSubsampling4(BaseSubsampling):
         """
         x = x.unsqueeze(1)  # (b, c=1, t, f)
         x = self.conv(x)
+        xs_conv_np = x.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, "embed_conv.npy"), xs_conv_np)
+
         b, c, t, f = x.size()
         x = self.out(x.transpose(1, 2).contiguous().view(b, t, c * f))
+
+        xs_linear = x.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, "embed_linear.npy"), xs_linear)
+
         x, pos_emb = self.pos_enc(x, offset)
+
+        xs_pos = x.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, "embed_pos.npy"), xs_pos)
+
         return x, pos_emb, x_mask[:, :, :-2:2][:, :, :-2:2]
 
 

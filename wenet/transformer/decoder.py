@@ -13,6 +13,11 @@ from wenet.transformer.embedding import PositionalEncoding
 from wenet.transformer.positionwise_feed_forward import PositionwiseFeedForward
 from wenet.utils.mask import (subsequent_mask, make_pad_mask)
 
+from wenet.transformer.debug import PassLayer
+
+import os
+import numpy as np
+root_dir = "../DeepSpeech/compare/result_store/wenet"
 
 class TransformerDecoder(torch.nn.Module):
     """Base class of Transfomer decoder module.
@@ -64,6 +69,7 @@ class TransformerDecoder(torch.nn.Module):
 
         self.normalize_before = normalize_before
         self.after_norm = torch.nn.LayerNorm(attention_dim, eps=1e-5)
+       # self.after_norm = PassLayer(attention_dim, eps=1e-5)
         self.use_output_layer = use_output_layer
         self.output_layer = torch.nn.Linear(attention_dim, vocab_size)
         self.num_blocks = num_blocks
@@ -71,15 +77,16 @@ class TransformerDecoder(torch.nn.Module):
             DecoderLayer(
                 attention_dim,
                 MultiHeadedAttention(attention_heads, attention_dim,
-                                     self_attention_dropout_rate),
+                                     self_attention_dropout_rate, "decoder_"+str(idx)+"_attn_"),
                 MultiHeadedAttention(attention_heads, attention_dim,
-                                     src_attention_dropout_rate),
+                                     src_attention_dropout_rate, "decoder_"+str(idx)+"_src_attn_"),
                 PositionwiseFeedForward(attention_dim, linear_units,
                                         dropout_rate),
                 dropout_rate,
                 normalize_before,
                 concat_after,
-            ) for _ in range(self.num_blocks)
+                idx,
+            ) for idx in range(self.num_blocks)
         ])
 
     def forward(
@@ -119,13 +126,26 @@ class TransformerDecoder(torch.nn.Module):
         # tgt_mask: (B, L, L)
         tgt_mask = tgt_mask & m
         x, _ = self.embed(tgt)
+        x_np = x.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, "decoder_embed_.npy"), x_np)
+
+        i = 0
         for layer in self.decoders:
             x, tgt_mask, memory, memory_mask = layer(x, tgt_mask, memory,
                                                      memory_mask)
+            x_decoder_np = x.cpu().detach().numpy()
+            np.save(os.path.join(root_dir, "decoder_" + str(i) +"_.npy"), x_decoder_np)
+            i += 1
+
         if self.normalize_before:
             x = self.after_norm(x)
+            x_norm_np = x.cpu().detach().numpy()
+            np.save(os.path.join(root_dir, "decoder_afternorm_.npy"), x_norm_np)
+
         if self.use_output_layer:
             x = self.output_layer(x)
+            x_output_np = x.cpu().detach().numpy()
+            np.save(os.path.join(root_dir, "decoder_output_.npy"), x_output_np)
         olens = tgt_mask.sum(1)
         return x, torch.tensor(0.0), olens
 

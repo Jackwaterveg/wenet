@@ -11,6 +11,7 @@ import torch
 from torch import nn
 from typeguard import check_argument_types
 
+from wenet.transformer.debug import PassLayer
 
 class ConvolutionModule(nn.Module):
     """ConvolutionModule in Conformer model."""
@@ -67,6 +68,7 @@ class ConvolutionModule(nn.Module):
         else:
             self.use_layer_norm = True
             self.norm = nn.LayerNorm(channels)
+            #self.norm = PassLayer(channels, eps=1e-5)
 
         self.pointwise_conv2 = nn.Conv1d(
             channels,

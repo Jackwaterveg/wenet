@@ -7,6 +7,9 @@
 from typing import Tuple, List, Optional
 
 import torch
+import os
+import numpy as np
+root_dir = "../DeepSpeech/compare/result_store/wenet"
 from typeguard import check_argument_types
 
 from wenet.transformer.attention import MultiHeadedAttention
@@ -26,6 +29,8 @@ from wenet.utils.common import get_activation
 from wenet.utils.mask import make_pad_mask
 from wenet.utils.mask import add_optional_chunk_mask
 
+
+from wenet.transformer.debug import PassLayer
 
 class BaseEncoder(torch.nn.Module):
     def __init__(
@@ -113,6 +118,7 @@ class BaseEncoder(torch.nn.Module):
 
         self.normalize_before = normalize_before
         self.after_norm = torch.nn.LayerNorm(output_size, eps=1e-5)
+       # self.after_norm = PassLayer(output_size, eps=1e-5)
         self.static_chunk_size = static_chunk_size
         self.use_dynamic_chunk = use_dynamic_chunk
         self.use_dynamic_left_chunk = use_dynamic_left_chunk
@@ -149,8 +155,19 @@ class BaseEncoder(torch.nn.Module):
         T = xs.size(1)
         masks = ~make_pad_mask(xs_lens, T).unsqueeze(1)  # (B, 1, T)
         if self.global_cmvn is not None:
-            xs = self.global_cmvn(xs)
+           xs = self.global_cmvn(xs)
+
+        print ("input", xs)
+        xs_input_np = xs.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, "input_.npy"), xs_input_np)
+
         xs, pos_emb, masks = self.embed(xs, masks)
+        print ("pos_emb", pos_emb)
+        print ("masks", masks)
+        xs_embed_np = xs.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, "embed_.npy"), xs_embed_np)
+
+
         mask_pad = masks  # (B, 1, T/subsample_rate)
         chunk_masks = add_optional_chunk_mask(xs, masks,
                                               self.use_dynamic_chunk,
@@ -158,8 +175,14 @@ class BaseEncoder(torch.nn.Module):
                                               decoding_chunk_size,
                                               self.static_chunk_size,
                                               num_decoding_left_chunks)
+        i = 0
         for layer in self.encoders:
             xs, chunk_masks, _ = layer(xs, chunk_masks, pos_emb, mask_pad)
+            print ("xs", xs)
+            xs_np = xs.cpu().detach().numpy()
+            np.save(os.path.join(root_dir, "encoder_"+ str(i)+"_.npy"), xs_np)
+            i += 1
+
         if self.normalize_before:
             xs = self.after_norm(xs)
         # Here we assume the mask is not changed in encoder layers, so just
@@ -447,5 +470,6 @@ class ConformerEncoder(BaseEncoder):
                 dropout_rate,
                 normalize_before,
                 concat_after,
-            ) for _ in range(num_blocks)
+                idx,
+            ) for idx in range(num_blocks)
         ])

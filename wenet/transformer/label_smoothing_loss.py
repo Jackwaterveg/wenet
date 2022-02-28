@@ -8,6 +8,9 @@
 import torch
 from torch import nn
 
+import os
+import numpy as np
+root_dir = "../DeepSpeech/compare/result_store/wenet"
 
 class LabelSmoothingLoss(nn.Module):
     """Label-smoothing loss.
@@ -55,6 +58,21 @@ class LabelSmoothingLoss(nn.Module):
         self.size = size
         self.normalize_length = normalize_length
 
+        print ("===========")
+        print ("padding_idx", self.padding_idx)
+        print ("self.confidence", self.confidence)
+        print ("self.smoothing",self.smoothing)
+        print ("self.size",self.size)
+        print ("self.normalize_length", self.normalize_length)
+        """
+        padding_idx -1
+        self.confidence 0.9
+        self.smoothing 0.1
+        self.size 4233
+        self.normalize_length False
+        """
+
+
     def forward(self, x: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """Compute loss between x and target.
 
@@ -80,7 +98,23 @@ class LabelSmoothingLoss(nn.Module):
         ignore = target == self.padding_idx  # (B,)
         total = len(target) - ignore.sum().item()
         target = target.masked_fill(ignore, 0)  # avoid -1 index
+        print ("label smoothing:target", target)
         true_dist.scatter_(1, target.unsqueeze(1), self.confidence)
+        print ("true_dist", true_dist)
+        np.save(os.path.join(root_dir, "true_dist.npy"), true_dist.cpu().detach().numpy())
+        
         kl = self.criterion(torch.log_softmax(x, dim=1), true_dist)
+        print ("x", x)
+        print ("log_softmax", torch.log_softmax(x, dim=1))
+        log_softmax = torch.log_softmax(x, dim=1)
+        x_log_softmax_np = log_softmax.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, "log_softmax_.npy"), x_log_softmax_np)
+        np.save("wenet_smoothing_x.npy", x.cpu().detach().numpy())
+        np.save("wenet_log_softmax.npy", torch.log_softmax(x, dim=1).cpu().detach().numpy())
         denom = total if self.normalize_length else batch_size
-        return kl.masked_fill(ignore.unsqueeze(1), 0).sum() / denom
+        print ("ignore",ignore)
+        res = kl.masked_fill(ignore.unsqueeze(1), 0).sum() / denom
+        res_np = res.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, "attn_res_.npy"), res_np)
+        print ("attn_res_np", res_np)
+        return res

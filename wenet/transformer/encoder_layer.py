@@ -10,6 +10,11 @@ from typing import Optional, Tuple
 import torch
 from torch import nn
 
+from wenet.transformer.debug import PassLayer
+
+import os
+import numpy as np
+root_dir = "../DeepSpeech/compare/result_store/wenet"
 
 class TransformerEncoderLayer(nn.Module):
     """Encoder layer module.
@@ -151,6 +156,7 @@ class ConformerEncoderLayer(nn.Module):
         dropout_rate: float = 0.1,
         normalize_before: bool = True,
         concat_after: bool = False,
+        layer_idx: int = -1,
     ):
         """Construct an EncoderLayer object."""
         super().__init__()
@@ -160,8 +166,11 @@ class ConformerEncoderLayer(nn.Module):
         self.conv_module = conv_module
         self.norm_ff = nn.LayerNorm(size, eps=1e-5)  # for the FNN module
         self.norm_mha = nn.LayerNorm(size, eps=1e-5)  # for the MHA module
+      #  self.norm_ff = PassLayer(size, eps=1e-5)
+      #  self.norm_mha = PassLayer(size, eps=1e-5)
         if feed_forward_macaron is not None:
             self.norm_ff_macaron = nn.LayerNorm(size, eps=1e-5)
+            #self.norm_ff_macaron = PassLayer(size, eps=1e-5)
             self.ff_scale = 0.5
         else:
             self.ff_scale = 1.0
@@ -170,11 +179,14 @@ class ConformerEncoderLayer(nn.Module):
                                           eps=1e-5)  # for the CNN module
             self.norm_final = nn.LayerNorm(
                 size, eps=1e-5)  # for the final output of the block
+          #  self.norm_conv = PassLayer(size, eps=1e-5)
+          #  self.norm_final = PassLayer(size, eps=1e-5)
         self.dropout = nn.Dropout(dropout_rate)
         self.size = size
         self.normalize_before = normalize_before
         self.concat_after = concat_after
         self.concat_linear = nn.Linear(size + size, size)
+        self.layer_idx = layer_idx
 
     def forward(
         self,
@@ -212,6 +224,13 @@ class ConformerEncoderLayer(nn.Module):
             if not self.normalize_before:
                 x = self.norm_ff_macaron(x)
 
+        # Debug HYX
+        encoder_name = "encoder_"+str(self.layer_idx)+"_"
+        print (encoder_name)
+        x_ff1_np = x.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, encoder_name + "x_ff1_.npy"), x_ff1_np)
+
+
         # multi-headed self-attention module
         residual = x
         if self.normalize_before:
@@ -229,6 +248,11 @@ class ConformerEncoderLayer(nn.Module):
             mask = mask[:, -chunk:, :]
 
         x_att = self.self_attn(x_q, x, x, mask, pos_emb)
+
+        # Debug HYX
+        x_att_np = x_att.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, encoder_name + "x_att_.npy"), x_att_np)
+
         if self.concat_after:
             x_concat = torch.cat((x, x_att), dim=-1)
             x = residual + self.concat_linear(x_concat)
@@ -249,6 +273,10 @@ class ConformerEncoderLayer(nn.Module):
 
             if not self.normalize_before:
                 x = self.norm_conv(x)
+
+        # Debug HYX
+        x_conv_np = x.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, encoder_name + "x_conv_.npy"), x_conv_np)
 
         # feed forward module
         residual = x

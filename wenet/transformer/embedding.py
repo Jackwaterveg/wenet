@@ -107,6 +107,7 @@ class RelPositionalEncoding(PositionalEncoding):
         assert offset + x.size(1) < self.max_len
         self.pe = self.pe.to(x.device)
         x = x * self.xscale
+        print ("rel position encoding, xcale", self.xscale)
         pos_emb = self.pe[:, offset:offset + x.size(1)]
         return self.dropout(x), self.dropout(pos_emb)
 

@@ -11,6 +11,10 @@ from typing import Optional, Tuple
 import torch
 from torch import nn
 
+import os
+import numpy as np
+root_dir = "../DeepSpeech/compare/result_store/wenet"
+
 
 class MultiHeadedAttention(nn.Module):
     """Multi-Head Attention layer.
@@ -21,7 +25,7 @@ class MultiHeadedAttention(nn.Module):
         dropout_rate (float): Dropout rate.
 
     """
-    def __init__(self, n_head: int, n_feat: int, dropout_rate: float):
+    def __init__(self, n_head: int, n_feat: int, dropout_rate: float, name: str=""):
         """Construct an MultiHeadedAttention object."""
         super().__init__()
         assert n_feat % n_head == 0
@@ -33,6 +37,7 @@ class MultiHeadedAttention(nn.Module):
         self.linear_v = nn.Linear(n_feat, n_feat)
         self.linear_out = nn.Linear(n_feat, n_feat)
         self.dropout = nn.Dropout(p=dropout_rate)
+        self.name = name
 
     def forward_qkv(
         self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor
@@ -81,6 +86,7 @@ class MultiHeadedAttention(nn.Module):
 
         """
         n_batch = value.size(0)
+        print (self.name + "attn mask", mask)
         if mask is not None:
             mask = mask.unsqueeze(1).eq(0)  # (batch, 1, *, time2)
             scores = scores.masked_fill(mask, -float('inf'))
@@ -88,12 +94,18 @@ class MultiHeadedAttention(nn.Module):
                 mask, 0.0)  # (batch, head, time1, time2)
         else:
             attn = torch.softmax(scores, dim=-1)  # (batch, head, time1, time2)
+        
+        x_np = attn.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, self.name + "attn.npy"), x_np)
 
         p_attn = self.dropout(attn)
         x = torch.matmul(p_attn, value)  # (batch, head, time1, d_k)
         x = (x.transpose(1, 2).contiguous().view(n_batch, -1,
                                                  self.h * self.d_k)
              )  # (batch, time1, d_model)
+        
+        x_np = x.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, self.name + "value.npy"), x_np)
 
         return self.linear_out(x)  # (batch, time1, d_model)
 
@@ -126,7 +138,17 @@ class MultiHeadedAttention(nn.Module):
 
         """
         q, k, v = self.forward_qkv(query, key, value)
+        
+        x_np = q.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, self.name + "q.npy"), x_np)
+        x_np = k.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, self.name + "k.npy"), x_np)
+        x_np = v.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, self.name + "v.npy"), x_np)
+
         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)
+        x_np = scores.cpu().detach().numpy()
+        np.save(os.path.join(root_dir, self.name + "scores.npy"), x_np)
         return self.forward_attention(v, scores, mask)
 
 
