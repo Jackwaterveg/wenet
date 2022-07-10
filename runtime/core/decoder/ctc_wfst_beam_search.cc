@@ -7,23 +7,27 @@
 
 namespace wenet {
 
+// 解码路径重置  
 void DecodableTensorScaled::Reset() {
+  // num_frames_ready_: 解码了的frame数量设置为0
   num_frames_ready_ = 0;
   done_ = false;
   // Give an empty initialization, will throw error when
   // AcceptLoglikes is not called
   logp_ = torch::zeros({1});
 }
-
+// 接收概率 ？
 void DecodableTensorScaled::AcceptLoglikes(const torch::Tensor& logp) {
+  // CHECK_EQ 判断是否相等
   CHECK_EQ(logp.dim(), 1);
   ++num_frames_ready_;
   // TODO(Binbin Zhang): Avoid copy here
   logp_ = logp;
+  // 没有完全搞懂，可能是让 accessor_ (torch 的 tensor 创建器) 获取 logp_ tensor ?
   accessor_.reset(new torch::TensorAccessor<float, 1>(
       logp_.data_ptr<float>(), logp_.sizes().data(), logp_.strides().data()));
 }
-
+// 获取指定 index (>=1) 的 loglikelyhood 
 float DecodableTensorScaled::LogLikelihood(int32 frame, int32 index) {
   CHECK(accessor_ != nullptr);
   CHECK_GT(index, 0);
@@ -31,7 +35,7 @@ float DecodableTensorScaled::LogLikelihood(int32 frame, int32 index) {
   CHECK_LT(frame, num_frames_ready_);
   return scale_ * (*accessor_)[index - 1];
 }
-
+// 如果 frame (index?)和 num_frames_ready_ 一样了，则认为是最后一帧
 bool DecodableTensorScaled::IsLastFrame(int32 frame) const {
   CHECK_LT(frame, num_frames_ready_);
   return done_ && (frame == num_frames_ready_ - 1);
